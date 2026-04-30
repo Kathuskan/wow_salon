@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "522326705056",
+    "project_id": "wowsalon-2a607",
+    "storage_bucket": "wowsalon-2a607.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:522326705056:android:df018814452c49ae241ac5",
+        "android_client_info": {
+          "package_name": "com.example.wow_salon"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDyNgc1IWPOYx9csBHQ8jBfSKRVmFFtxHY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
