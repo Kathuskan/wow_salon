@@ -3,7 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart'; 
 import 'firebase_options.dart';
 import 'screens/login_screen.dart';
-import 'screens/DashboardScreen.dart';
+import 'screens/dashboard_screen.dart';
 
 // 1. This is the crucial part that was missing or skipped!
 void main() async {
@@ -35,7 +35,7 @@ class SalonApp extends StatelessWidget {
         builder: (context, snapshot) {
           // If the snapshot has user data, they are logged in.
           if (snapshot.hasData) {
-            return const DashboardScreen(); 
+            return DashboardScreen(); 
           }
           // Otherwise, they are not logged in.
           return const LoginScreen();

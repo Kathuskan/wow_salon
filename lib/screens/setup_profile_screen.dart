@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-// TODO: Replace this import path with your actual dashboard file location
-// import 'dashboard_screen.dart'; 
+import 'dashboard_screen.dart'; 
 
 class SetupProfileScreen extends StatefulWidget {
   const SetupProfileScreen({super.key});
@@ -33,7 +32,7 @@ class _SetupProfileScreenState extends State<SetupProfileScreen> {
       String uid;
       String userPhone;
 
-      // 🚀 DEVELOPER BYPASS SWITCH FOR LOCAL SIMULATOR SCOPES
+      // DEVELOPER BYPASS SWITCH FOR LOCAL SIMULATOR SCOPES
       if (FirebaseAuth.instance.currentUser == null) {
         uid = "mock_developer_uid_123";
         userPhone = "+15555555555";
@@ -42,7 +41,7 @@ class _SetupProfileScreenState extends State<SetupProfileScreen> {
         userPhone = FirebaseAuth.instance.currentUser!.phoneNumber ?? "";
       }
 
-      // 2. Save the data to Firestore in a 'users' collection
+      // Save the data to Firestore in a 'users' collection
       await FirebaseFirestore.instance.collection('users').doc(uid).set({
         'name': _nameController.text.trim(),
         'gender': _selectedGender,
@@ -61,9 +60,9 @@ class _SetupProfileScreenState extends State<SetupProfileScreen> {
       if (!mounted) return;
       setState(() => _isLoading = false);
       
-      // 🚀 SAFETY FALLBACK RUN: Pushes you forward even if your Firestore rules stall offline
+      // SAFETY FALLBACK RUN: Pushes you forward even if your Firestore rules stall offline
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("[DEV MODE] Local routing fallback applied.")),
+        const SnackBar(content: Text("[DEV MODE] Local routing fallback applied.")),
       );
       _navigateToDashboard();
     }
@@ -74,13 +73,10 @@ class _SetupProfileScreenState extends State<SetupProfileScreen> {
       const SnackBar(content: Text("Profile Saved!"), backgroundColor: Colors.green),
     );
     
-    // TODO: Create a placeholder DashboardScreen widget and uncomment below!
-    /*
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (context) => const DashboardScreen()),
     );
-    */
   }
 
   @override
@@ -133,16 +129,21 @@ class _SetupProfileScreenState extends State<SetupProfileScreen> {
             ),
             const SizedBox(height: 30),
 
-            ElevatedButton(
-              onPressed: _isLoading ? null : saveProfile,
-              style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(15)),
-              child: _isLoading 
-                  ? const CircularProgressIndicator() 
-                  : const Text("Save Profile & Continue", style: TextStyle(fontSize: 16)),
-            ),
+            // 🚀 FIXED: Stripped the erroneous 'Widget' keyword signature definition call here
+            buildButtonOrProgress(),
           ],
         ),
       ),
+    );
+  }
+
+  Widget buildButtonOrProgress() {
+    return ElevatedButton(
+      onPressed: _isLoading ? null : saveProfile,
+      style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(15)),
+      child: _isLoading 
+          ? const CircularProgressIndicator() 
+          : const Text("Save Profile & Continue", style: TextStyle(fontSize: 16)),
     );
   }
 }
