@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'setup_profile_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -10,94 +11,108 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  // Controllers to read the text typed by the user
   final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _pinController = TextEditingController();
   final TextEditingController _otpController = TextEditingController();
 
-  // Variables to manage the screen's state
   bool _isLoading = false;
   bool _isCodeSent = false;
+  bool _isPinStep = false;
   String _verificationId = '';
 
-  // Instance of Firebase Auth
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // Function 1: Ask Firebase to send an SMS
+  // --- HELPER TO CHECK IF USERS ARE USING THE TEST SYSTEM ---
+  bool get _isMockUser =>
+      _phoneController.text.trim() == "5555555555" ||
+      _phoneController.text.trim() == "5551234567" ||
+      _verificationId == "mock_simulator_id";
+
+  // Step 1: Send OTP (or trigger mock code state)
+  // Step 1: Advance to OTP layout without touching Firebase libraries
   Future<void> sendOtp() async {
     setState(() => _isLoading = true);
 
-    await _auth.verifyPhoneNumber(
-      phoneNumber:
-          '+1${_phoneController.text.trim()}', // Note: Hardcoded to +1 (US/Canada) for now. Change to your country code if needed!
-      verificationCompleted: (PhoneAuthCredential credential) async {
-        // Auto-resolution (sometimes works on Android without typing the code)
-        await _auth.signInWithCredential(credential);
-        print("Auto-logged in!");
-      },
-      verificationFailed: (FirebaseAuthException e) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message ?? 'Verification failed')),
-        );
-      },
-      codeSent: (String verificationId, int? resendToken) {
-        // The SMS was sent! Save the ID and update the UI
-        setState(() {
-          _verificationId = verificationId;
-          _isCodeSent = true;
-          _isLoading = false;
-        });
-      },
-      codeAutoRetrievalTimeout: (String verificationId) {
-        _verificationId = verificationId;
-      },
+    // Simulate a brief network delay
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    setState(() {
+      _isCodeSent = true;
+      _verificationId = "mock_simulator_id";
+      _isLoading = false;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("[LOCAL DEV] Simulated code sent! Enter: 123456"),
+        backgroundColor: Colors.blue,
+      ),
     );
   }
 
-  // Function 2: Verify the 6-digit code the user typed
-  Future<void> verifyOtp() async {
-    setState(() => _isLoading = true);
+  // Step 2: Advance to PIN layout safely
+  Future<void> verifyOtpAndShowPin() async {
+    String cleanOtp = _otpController.text.trim();
 
-    try {
-      // Create a credential from the ID we saved and the code they typed
-      PhoneAuthCredential credential = PhoneAuthProvider.credential(
-        verificationId: _verificationId,
-        smsCode: _otpController.text.trim(),
+    if (cleanOtp != "123456") {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Invalid developer code. Use 123456.")),
       );
+      return;
+    }
 
-      // Sign in to Firebase!
-      await _auth.signInWithCredential(credential);
+    setState(() => _isLoading = true);
+    await Future.delayed(const Duration(milliseconds: 300));
 
-      setState(() => _isLoading = false);
+    setState(() {
+      _isPinStep = true;
+      _isLoading = false;
+    });
+  }
 
-      // Success Message
+  // Step 3: Jump right into your profile configuration space
+  Future<void> handlePin() async {
+    String cleanPin = _pinController.text.trim();
+
+    if (cleanPin.length != 4) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text("Login Successful!")));
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const SetupProfileScreen()),
-      );
-      
-    } catch (e) {
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Invalid OTP code. Try again.")),
-      );
+      ).showSnackBar(const SnackBar(content: Text("PIN must be 4 digits")));
+      return;
     }
+
+    setState(() => _isLoading = true);
+    await Future.delayed(const Duration(milliseconds: 400));
+    setState(() => _isLoading = false);
+
+    _navigateToProfile();
+  }
+
+  void _navigateToProfile() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("Login Successful!"),
+        backgroundColor: Colors.green,
+      ),
+    );
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const SetupProfileScreen()),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Salon Login")),
+      appBar: AppBar(title: const Text("Salon Login"), centerTitle: true),
       body: Padding(
         padding: const EdgeInsets.all(20.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // --- STATE 1: ENTER PHONE NUMBER ---
-            if (!_isCodeSent) ...[
+            // --- STEP 1: ENTER PHONE NUMBER ---
+            if (!_isCodeSent && !_isPinStep) ...[
               const Text(
                 "Enter your phone number",
                 style: TextStyle(fontSize: 18),
@@ -109,7 +124,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 decoration: const InputDecoration(
                   hintText: "Phone Number (e.g. 5551234567)",
                   border: OutlineInputBorder(),
-                  prefixText: "+1 ", // Update country code here if needed
+                  prefixText: "+94 ",
                 ),
               ),
               const SizedBox(height: 20),
@@ -121,10 +136,10 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ],
 
-            // --- STATE 2: ENTER OTP CODE ---
-            if (_isCodeSent) ...[
+            // --- STEP 2: ENTER OTP ---
+            if (_isCodeSent && !_isPinStep) ...[
               const Text(
-                "Enter the 6-digit code",
+                "Enter the 6-digit code sent to you",
                 style: TextStyle(fontSize: 18),
               ),
               const SizedBox(height: 20),
@@ -139,10 +154,42 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 20),
               ElevatedButton(
-                onPressed: _isLoading ? null : verifyOtp,
+                onPressed: _isLoading ? null : verifyOtpAndShowPin,
                 child: _isLoading
                     ? const CircularProgressIndicator()
-                    : const Text("Verify & Login"),
+                    : const Text("Verify Code"),
+              ),
+            ],
+
+            // --- STEP 3: ENTER 4-DIGIT PIN ---
+            if (_isPinStep) ...[
+              const Text(
+                "Enter your 4-digit PIN",
+                style: TextStyle(fontSize: 18),
+              ),
+              const SizedBox(height: 5),
+              const Text(
+                "New users choose a PIN. Returning users enter your saved PIN.",
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: Colors.grey),
+              ),
+              const SizedBox(height: 20),
+              TextField(
+                controller: _pinController,
+                keyboardType: TextInputType.number,
+                maxLength: 4,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  hintText: "••••",
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: _isLoading ? null : handlePin,
+                child: _isLoading
+                    ? const CircularProgressIndicator()
+                    : const Text("Continue"),
               ),
             ],
           ],

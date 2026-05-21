@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -9,13 +11,35 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
+  String _userRole = 'Customer'; // Default fallback role
+  bool _isLoadingRole = true;
 
-  // These are the three screens we will switch between.
-  static const List<Widget> _widgetOptions = <Widget>[
-    Center(child: Text('Home Tab: Salon Details & Promos', style: TextStyle(fontSize: 20))),
-    Center(child: Text('Calendar Tab: Book Appointments', style: TextStyle(fontSize: 20))),
-    Center(child: Text('Profile Tab: Your Settings', style: TextStyle(fontSize: 20))),
-  ];
+  @override
+  void Alignment() {
+    super.initState();
+    _fetchUserRole();
+  }
+
+  // Fetch the role ('Owner' or 'Customer') from Firestore
+  Future<void> _fetchUserRole() async {
+    try {
+      String uid = FirebaseAuth.instance.currentUser!.uid;
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      
+      if (userDoc.exists && userDoc.data() != null) {
+        Map<String, dynamic> data = userDoc.data() as Map<String, dynamic>;
+        setState(() {
+          _userRole = data['role'] ?? 'Customer';
+          _isLoadingRole = false;
+        });
+      } else {
+        setState(() => _isLoadingRole = false);
+      }
+    } catch (e) {
+      print("Error fetching user role: $e");
+      setState(() => _isLoadingRole = false);
+    }
+  }
 
   void _onItemTapped(int index) {
     setState(() {
@@ -25,15 +49,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Show a loading spinner while we grab the role from the cloud database
+    if (_isLoadingRole) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    // Define different tab options depending on the user role
+    final List<Widget> customerTabs = [
+      const Center(child: Text('Salon Details & Offers (Customer view)', style: TextStyle(fontSize: 18))),
+      const Center(child: Text('Book & View My Slots (Customer view)', style: TextStyle(fontSize: 18))),
+      const Center(child: Text('My Profile Settings', style: TextStyle(fontSize: 18))),
+    ];
+
+    final List<Widget> ownerTabs = [
+      const Center(child: Text('Update Salon Shop Details (Owner view)', style: TextStyle(fontSize: 18))),
+      const Center(child: Text('Manage Availability & Approvals (Owner view)', style: TextStyle(fontSize: 18))),
+      const Center(child: Text('Owner Profile Settings', style: TextStyle(fontSize: 18))),
+    ];
+
+    // Pick the right set of tabs
+    final currentTabs = _userRole == 'Owner' ? ownerTabs : customerTabs;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Wow Salon"),
+        title: Text(_userRole == 'Owner' ? "Wow Salon (Admin)" : "Wow Salon"),
         centerTitle: true,
       ),
-      // The body changes based on which tab is selected
-      body: _widgetOptions.elementAt(_selectedIndex),
-      
-      // The bottom navigation bar
+      body: currentTabs.elementAt(_selectedIndex),
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(
@@ -50,7 +94,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ],
         currentIndex: _selectedIndex,
-        selectedItemColor: Colors.blueAccent,
+        selectedItemColor: _userRole == 'Owner' ? Colors.deepPurple : Colors.blueAccent,
         onTap: _onItemTapped,
       ),
     );
