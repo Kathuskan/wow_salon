@@ -1,19 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart'; 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
 import 'screens/login_screen.dart';
+import 'screens/setup_profile_screen.dart'; // 🚀 FIXED: Added the missing file import layer here
 import 'screens/dashboard_screen.dart';
+import 'screens/landing_page.dart';
+import 'screens/customer_register_screen.dart';
 
-// 1. This is the crucial part that was missing or skipped!
 void main() async {
-  // Ensure Flutter bindings are ready before interacting with native code
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Turn on Firebase
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+
+  // Initialize Firebase with our cross-platform options
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   runApp(const SalonApp());
 }
@@ -24,23 +23,20 @@ class SalonApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Salon App',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        useMaterial3: true,
-      ),
-      // 2. Now it is safe to check the auth state because Firebase is initialized
-      home: StreamBuilder<User?>(
-        stream: FirebaseAuth.instance.authStateChanges(),
-        builder: (context, snapshot) {
-          // If the snapshot has user data, they are logged in.
-          if (snapshot.hasData) {
-            return DashboardScreen(); 
-          }
-          // Otherwise, they are not logged in.
-          return const LoginScreen();
-        },
-      ),
+      title: 'Wow Salon',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(primarySwatch: Colors.blue, useMaterial3: true),
+
+      // 1. The app starts directly on the Admin Dashboard interface
+      home: const LandingPage(),
+      // 2. Wire up the navigation route path map for the logout fallback redirection
+      routes: {
+      '/register': (context) => const CustomerRegisterScreen(),
+      '/profile_setup': (context) => const SetupProfileScreen(),
+      '/dashboard': (context) => const DashboardScreen(),
+      // We will create this customer panel view hub next!
+      // '/customer_dashboard': (context) => const CustomerDashboardScreen(), 
+    },
     );
   }
 }
