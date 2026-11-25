@@ -1,17 +1,197 @@
-# wow_salon
+# 💇 Wow Salon
 
-A new Flutter project.
+A Flutter mobile app for managing salon appointment bookings in real-time, powered by Firebase Firestore. Customers can browse and request available time slots, while the salon owner manages the full booking workflow from an admin dashboard.
 
-## Getting Started
+---
 
-This project is a starting point for a Flutter application.
+## ✨ Features
 
-A few resources to get you started if this is your first Flutter project:
+### For Customers
+- **Browse open slots** – View available, pending, and confirmed appointment slots for the next 5 working days (Mon–Fri), colour-coded at a glance.
+- **Register & log in** – Sign up with your phone number, name, address, gender, and a 6-digit PIN. Login is verified with an SMS OTP code.
+- **Request an appointment** – Tap any green (available) slot to submit a booking request. The slot flips to yellow (pending) immediately so no one else can double-book it.
+- **Real-time updates** – The slot grid updates live across all devices the moment the admin approves or rejects a request.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+### For the Salon Owner (Admin)
+- **Admin dashboard** – Accessible via the settings icon on the landing page. Log in with phone `999` / PIN `111111`.
+- **Auto-generated schedule** – On dashboard load, the app automatically creates 6 time slots (9 AM–12 PM and 2–5 PM) for each working day across the next 7 days.
+- **Approve / Reject bookings** – One-tap actions move a slot from `pending` → `approved` or back to `available`, unlocking it for other customers.
+- **Post announcements** – Update the banner displayed at the top of the customer storefront in real-time (e.g. "Special offer this week!").
+- **Reset schedule** – Wipe and regenerate all slots with a single button (useful for testing or at the start of a new week).
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+---
+
+## 🗂 Project Structure
+
+```
+lib/
+├── main.dart                        # App entry point, Firebase init, route table
+├── firebase_options.dart            # Auto-generated Firebase config
+│
+├── models/
+│   ├── slot_model.dart              # SalonSlot — Firestore slot document model
+│   └── user_model.dart              # SalonUser — customer profile model
+│
+├── services/
+│   └── salon_service.dart           # Firestore helpers (stream slots, add/delete)
+│
+└── screens/
+    ├── landing_page.dart            # Public storefront — slot grid + date selector
+    ├── login_screen.dart            # Phone + PIN login with SMS OTP step
+    ├── customer_register_screen.dart# New customer sign-up form
+    ├── setup_profile_screen.dart    # Post-registration profile completion
+    ├── customer_dashboard_screen.dart # Logged-in customer view & booking
+    ├── book_appointment_screen.dart # Available slot list (alternative booking view)
+    ├── dashboard_screen.dart        # 🔐 Admin control panel
+    └── manage_slots_screen.dart     # Admin slot management (legacy helper)
+```
+
+---
+
+## 🔥 Firestore Database Schema
+
+### `slots` collection
+Each document ID is deterministic: `{yyyy-MM-dd}_{time}` (e.g. `2026-11-25_09:00AM-10:00AM`).
+
+| Field | Type | Description |
+|---|---|---|
+| `dateString` | String | Date the slot belongs to, e.g. `"2026-11-25"` |
+| `dayOfWeek` | String | e.g. `"Monday"` |
+| `time` | String | e.g. `"09:00 AM - 10:00 AM"` |
+| `status` | String | `"available"` \| `"pending"` \| `"approved"` \| `"terminated"` |
+| `bookedBy` | String | Customer UID, or `"none"` |
+| `customRequestedService` | String | Optional service note from customer |
+
+### `users` collection
+Document ID pattern: `customer_{phone}` (e.g. `customer_0771234567`).
+
+| Field | Type | Description |
+|---|---|---|
+| `uid` | String | Same as doc ID |
+| `name` | String | Customer's full name |
+| `phone` | String | Phone number used to log in |
+| `address` | String | Customer's address |
+| `gender` | String | `"Male"` \| `"Female"` \| `"Other"` |
+| `role` | String | `"Customer"` or `"Owner"` |
+| `pin` | String | 6-digit PIN (**store hashed in production**) |
+
+### `announcements` collection
+Single document: `announcements/active_banner`.
+
+| Field | Type | Description |
+|---|---|---|
+| `content` | String | Banner text shown on the storefront |
+| `updatedAt` | Timestamp | Last update time |
+
+---
+
+## 🚦 Slot Status Colour Code
+
+| Status | Colour | Customer | Admin |
+|---|---|---|---|
+| `available` | 🟢 Green `#4CAF50` | Tap to request | Can edit |
+| `pending` | 🟡 Yellow `#FFC107` | Locked (awaiting approval) | Approve or Reject |
+| `approved` | 🔴 Red `#F44336` | Locked (confirmed) | Can cancel |
+| `terminated` | — hidden — | Not shown | Hidden from grid |
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- [Flutter SDK](https://docs.flutter.dev/get-started/install) ≥ 3.11
+- A Firebase project with **Cloud Firestore** enabled
+- Dart SDK ≥ 3.11.1
+
+### 1. Clone the repository
+
+```bash
+git clone <your-repo-url>
+cd wow_salon
+```
+
+### 2. Install dependencies
+
+```bash
+flutter pub get
+```
+
+### 3. Configure Firebase
+
+The `lib/firebase_options.dart` file is auto-generated by the Firebase CLI and already committed. If you are setting up a **new** Firebase project:
+
+```bash
+# Install the FlutterFire CLI
+dart pub global activate flutterfire_cli
+
+# Connect your project
+flutterfire configure
+```
+
+This regenerates `lib/firebase_options.dart` for your project.
+
+### 4. Run the app
+
+```bash
+flutter run
+```
+
+> [!TIP]
+> Run `flutter devices` first to pick your target device (Android, iOS, or Chrome for web).
+
+---
+
+## 🔐 Test Credentials
+
+| Account | Phone | PIN | OTP |
+|---|---|---|---|
+| **Admin** | `999` | `111111` | `123456` |
+| **Any customer** | *(registered phone)* | *(set during signup)* | `123456` |
+
+> [!NOTE]
+> OTP verification is **mocked** for development — the hardcoded OTP code is `123456`. In production, integrate a real SMS gateway (e.g. Twilio) and update the login flow to verify against a real one-time code.
+
+---
+
+## 📦 Key Dependencies
+
+| Package | Purpose |
+|---|---|
+| `firebase_core` | Firebase SDK initialisation |
+| `cloud_firestore` | Real-time NoSQL database |
+| `shared_preferences` | Local device storage (session persistence) |
+| `intl` | Date formatting for slot labels and date selectors |
+| `cupertino_icons` | iOS-style icon set |
+
+---
+
+## 🛣 Screens & Navigation Flow
+
+```
+LandingPage (/)
+    ├── [Admin icon] → DashboardScreen (/admin_dashboard)
+    │       └── ManageSlotsScreen
+    │
+    └── [Tap available slot] → LoginScreen (/login)
+            ├── [New user] → CustomerRegisterScreen (/register)
+            │       └── SetupProfileScreen (/profile_setup)
+            │               └── CustomerDashboardScreen (/customer_dashboard)
+            │
+            └── [Existing user] → CustomerDashboardScreen (/customer_dashboard)
+```
+
+---
+
+## ⚠️ Known Limitations & Production TODOs
+
+- **PIN stored in plain text** — hash PINs with `bcrypt` or store behind Firebase Auth before going live.
+- **OTP is hardcoded** — integrate a real SMS gateway (Twilio, Firebase Phone Auth, etc.) to send and verify real codes.
+- **Customer UID is mocked** — `bookedBy` is set to a placeholder string; wire in the authenticated user's UID after enabling Firebase Auth.
+- **No push notifications yet** — The architecture is designed for Firebase Cloud Messaging (FCM); Cloud Functions need to be deployed to trigger SMS/push on slot state changes.
+
+---
+
+## 📄 License
+
+This project is private and not published to pub.dev (`publish_to: none`).

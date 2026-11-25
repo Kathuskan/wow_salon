@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class CustomerRegisterScreen extends StatefulWidget {
@@ -9,32 +10,28 @@ class CustomerRegisterScreen extends StatefulWidget {
 }
 
 class _CustomerRegisterScreenState extends State<CustomerRegisterScreen> {
-  int _currentStep = 0; // 0 = Profile Details, 1 = 6-Digit PIN assignment
+  // Step State Flag
+  bool _isVerifyingSMS = false;
   bool _isLoading = false;
 
-  // Form Controllers
+  // Form Field Controllers
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _addressController = TextEditingController();
   final _pinController = TextEditingController();
+  final _smsController = TextEditingController();
 
   String _selectedGender = 'Male';
 
-  void _nextStep() {
-    if (_nameController.text.isEmpty || _phoneController.text.isEmpty || _addressController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please complete all registration fields")),
-      );
-      return;
-    }
-    setState(() => _currentStep = 1); // Move forward into the secure PIN layout view
-  }
-
-  Future<void> _completeRegistration() async {
-    String cleanPin = _pinController.text.trim();
-    if (cleanPin.length != 6 || int.tryParse(cleanPin) == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Your passcode must be exactly 6 numerical digits")),
+  // 1. PHASE ONE: INITIATE ACCOUNT & DISPATCH REGISTRATION PARAMETERS
+  Future<void> _sendSMSVerification() async {
+    if (_nameController.text.trim().isEmpty ||
+        _phoneController.text.trim().isEmpty ||
+        _addressController.text.trim().isEmpty ||
+        _pinController.text.trim().length != 6) {
+      _showSnackbar(
+        "Please fill all profile fields accurately. PIN must be 6 digits.",
+        Colors.red,
       );
       return;
     }
@@ -42,104 +39,248 @@ class _CustomerRegisterScreenState extends State<CustomerRegisterScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Create a unique mock user ID linked directly to their phone number for easy local testing
-      String mockUid = "customer_${_phoneController.text.trim()}";
+      // SECURE INPUT VALIDATION PATTERN (RegEx Check)
+      final phoneRegex = RegExp(r'^\d{9,11}$');
+      if (!phoneRegex.hasMatch(_phoneController.text.trim())) {
+        throw Exception(
+          "Invalid phone format. Enter between 9 to 11 pure digits.",
+        );
+      }
 
-      // Save our organized data map to the 'users' directory collection folder
-      await FirebaseFirestore.instance.collection('users').doc(mockUid).set({
+      // SIMULATING OUTBOUND SMS GATEWAY TRANSACTION PAYLOAD
+      // In production, an HTTP POST goes out to your SMS provider bridge here.
+      print(
+        "TRANSMITTING OTP PAYLOAD STRING TO CELLULAR TARGET: ${_phoneController.text}",
+      );
+      await Future.delayed(
+        const Duration(seconds: 2),
+      ); // Simulate network propagation
+
+      setState(() {
+        _isLoading = false;
+        _isVerifyingSMS = true; // Flip UI layout to show SMS PIN keypad entry
+      });
+      _showSnackbar(
+        "Verification code sent via SMS text message!",
+        Colors.green,
+      );
+    } catch (e) {
+      setState(() => _isLoading = false);
+      _showSnackbar(e.toString().replaceAll("Exception: ", ""), Colors.red);
+    }
+  }
+
+  // 2. PHASE TWO: VERIFY ONE-TIME CODE & WRITE TO CLOUD NO-SQL TREE
+  Future<void> _verifyOTPAndCreateAccount() async {
+    if (_smsController.text.trim().length != 6) {
+      _showSnackbar("Please input the 6-digit verification code.", Colors.red);
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      await Future.delayed(const Duration(milliseconds: 1500));
+      // MOCK OTP INTERCEPT VALIDATION
+      if (_smsController.text.trim() != "123456") {
+        throw Exception(
+          "Invalid SMS token provided. Please check your messages.",
+        );
+      }
+
+      String customUid = "customer_${_phoneController.text.trim()}";
+
+      // WRITE RAW FIELDS INTO CONSOLIDATED DATA MAP DOCUMENT
+      await FirebaseFirestore.instance.collection('users').doc(customUid).set({
+        'uid': customUid,
         'name': _nameController.text.trim(),
         'phone': _phoneController.text.trim(),
         'address': _addressController.text.trim(),
         'gender': _selectedGender,
         'role': 'Customer',
-        'pin': cleanPin,
+        'pin': _pinController.text.trim(), // Stored safely inside sandbox node
+        'deviceToken': 'unregistered',
         'createdAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      });
 
-      if (!mounted) return;
       setState(() => _isLoading = false);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Account Registered Successfully!"), backgroundColor: Colors.green),
-      );
-
-      // Route cleanly into the customer experience workspace dashboard
+      // Clear out entry memory cards cleanly using replacement route
+      if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/customer_dashboard');
+      _showSnackbar("Profile verified and saved successfully!", Colors.green);
     } catch (e) {
       setState(() => _isLoading = false);
-      print("Database Write Registration Error: $e");
+      _showSnackbar(e.toString().replaceAll("Exception: ", ""), Colors.red);
     }
+  }
+
+  void _showSnackbar(String text, Color bg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(text),
+        backgroundColor: bg,
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(_currentStep == 0 ? "Create Account" : "Secure Your Account")),
-      body: Padding(
-        padding: const EdgeInsets.all(25.0),
-        child: _isLoading 
-            ? const Center(child: CircularProgressIndicator())
-            : _currentStep == 0 ? _buildDetailsForm() : _buildPinForm(),
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: Text(
+          _isVerifyingSMS ? 'SMS Security Lock' : 'Create Profile Ledger',
+        ),
+        centerTitle: true,
       ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(24.0),
+              child: _isVerifyingSMS
+                  ? _buildSMSVerificationLayout()
+                  : _buildProfileFormLayout(),
+            ),
     );
   }
 
-  // Layout Panel 1: Profile Details Gathering
-  Widget _buildDetailsForm() {
-    return ListView(
+  // UI BLOCK A: USER PROFILE METADATA REGISTRATION FORM
+  Widget _buildProfileFormLayout() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Text("Join Wow Salon", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 5),
-        const Text("Enter your credentials to book dynamic styling slots.", style: TextStyle(color: Colors.grey)),
-        const SizedBox(height: 25),
-        TextField(controller: _nameController, decoration: const InputDecoration(labelText: "Full Name", border: OutlineInputBorder())),
+        const Text(
+          "Join Wow Salon",
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+          textAlign: TextAlign.center,
+        ),
         const SizedBox(height: 20),
-        TextField(controller: _phoneController, decoration: const InputDecoration(labelText: "Phone Number", border: OutlineInputBorder()), keyboardType: TextInputType.phone),
-        const SizedBox(height: 20),
-        TextField(controller: _addressController, decoration: const InputDecoration(labelText: "Residential Address", border: OutlineInputBorder())),
-        const SizedBox(height: 20),
+        TextField(
+          controller: _nameController,
+          decoration: const InputDecoration(
+            labelText: 'Full Name',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _phoneController,
+          keyboardType: TextInputType.phone,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          decoration: const InputDecoration(
+            labelText: 'Phone Number',
+            border: OutlineInputBorder(),
+            hintText: '0771234567',
+          ),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _addressController,
+          decoration: const InputDecoration(
+            labelText: 'Residential Address',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 16),
         DropdownButtonFormField<String>(
           value: _selectedGender,
-          decoration: const InputDecoration(border: OutlineInputBorder(), labelText: "Gender Identity"),
-          items: ['Male', 'Female', 'Other'].map((g) => DropdownMenuItem(value: g, child: Text(g))).toList(),
+          items: [
+            'Male',
+            'Female',
+            'Other',
+          ].map((g) => DropdownMenuItem(value: g, child: Text(g))).toList(),
           onChanged: (val) => setState(() => _selectedGender = val!),
+          decoration: const InputDecoration(
+            labelText: 'Gender Identifier',
+            border: OutlineInputBorder(),
+          ),
         ),
-        const SizedBox(height: 40),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _pinController,
+          obscureText: true,
+          keyboardType: TextInputType.number,
+          maxLength: 6,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          decoration: const InputDecoration(
+            labelText: 'Set Account 6-Digit PIN',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 24),
         ElevatedButton(
-          onPressed: _nextStep,
-          style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(15)),
-          child: const Text("Continue to PIN Setup", style: TextStyle(fontSize: 16)),
+          onPressed: _sendSMSVerification,
+          style: ElevatedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            backgroundColor: Colors.blue,
+          ),
+          child: const Text(
+            "Request SMS Verification",
+            style: TextStyle(fontSize: 16, color: Colors.white),
+          ),
         ),
       ],
     );
   }
 
-  // Layout Panel 2: Secure Access 6-Digit PIN configuration setup
-  Widget _buildPinForm() {
+  // UI BLOCK B: SECURE ONE-TIME PASSWORD MATRIX LOCK UP
+  Widget _buildSMSVerificationLayout() {
     return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Icon(Icons.lock_outline, size: 70, color: Colors.blueAccent),
-        const SizedBox(height: 20),
-        const Text("Set your Security PIN", textAlign: TextAlign.center, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 10),
-        const Text("You will use this 6-digit code along with your phone number to sign in next time.", textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+        const Icon(Icons.phonelink_lock, size: 80, color: Colors.blue),
+        const SizedBox(height: 24),
+        const Text(
+          "Enter Verification Code",
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          "An SMS contains a text token has been targeted to ${_phoneController.text}. Input code below to unseal profile.",
+          style: const TextStyle(color: Colors.grey),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          "For testing purposes use code: 123456",
+          style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold),
+          textAlign: TextAlign.center,
+        ),
         const SizedBox(height: 30),
         TextField(
-          controller: _pinController,
-          decoration: const InputDecoration(labelText: "6-Digit Access PIN", border: OutlineInputBorder(), counterText: ""),
-          maxLength: 6,
-          obscureText: true,
+          controller: _smsController,
           keyboardType: TextInputType.number,
+          maxLength: 6,
           textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 24, letterSpacing: 10, fontWeight: FontWeight.bold),
+          style: const TextStyle(
+            fontSize: 24,
+            letterSpacing: 8,
+            fontWeight: FontWeight.bold,
+          ),
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            counterText: "",
+          ),
         ),
-        const SizedBox(height: 40),
+        const SizedBox(height: 24),
         ElevatedButton(
-          onPressed: _completeRegistration,
-          style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(15), backgroundColor: Colors.green, foregroundColor: Colors.white),
-          child: const Text("Complete & Launch App", style: TextStyle(fontSize: 16)),
+          onPressed: _verifyOTPAndCreateAccount,
+          style: ElevatedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            backgroundColor: Colors.green,
+          ),
+          child: const Text(
+            "Verify Token & Register",
+            style: TextStyle(fontSize: 16, color: Colors.white),
+          ),
+        ),
+        TextButton(
+          onPressed: () => setState(() => _isVerifyingSMS = false),
+          child: const Text("Back to Form Modification"),
         ),
       ],
     );

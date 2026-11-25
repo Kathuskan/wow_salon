@@ -1,113 +1,188 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 
-class LandingPage extends StatelessWidget {
+class LandingPage extends StatefulWidget {
   const LandingPage({super.key});
+
+  @override
+  State<LandingPage> createState() => _LandingPageState();
+}
+
+class _LandingPageState extends State<LandingPage> {
+  String _activeDateString = DateFormat('yyyy-MM-dd').format(DateTime.now());
+  List<DateTime> _upcomingWorkdays = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _compileUpcomingWorkdaysList();
+  }
+
+  // Generate real calendar dates for selection bar, omitting weekends
+  void _compileUpcomingWorkdaysList() {
+    List<DateTime> list = [];
+    DateTime target = DateTime.now();
+    
+    while (list.length < 5) {
+      String dayName = DateFormat('EEEE').format(target);
+      if (dayName != 'Saturday' && dayName != 'Sunday') {
+        list.add(target);
+      }
+      target = target.add(const Duration(days: 1));
+    }
+    
+    setState(() {
+      _upcomingWorkdays = list;
+      _activeDateString = DateFormat('yyyy-MM-dd').format(list[0]);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            // Hero Image & Branding Banner
-            Container(
-              height: 350,
-              width: double.infinity,
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.blueAccent, Colors.lightBlue],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text('WOW SALON', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+        centerTitle: true,
+        backgroundColor: Colors.white,
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.admin_panel_settings, color: Colors.black),
+            onPressed: () => Navigator.pushNamed(context, '/admin_dashboard'),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          // ANNOUNCEMENT STREAM BANNER
+          StreamBuilder<DocumentSnapshot>(
+            stream: FirebaseFirestore.instance.collection('announcements').doc('active_banner').snapshots(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData || !snapshot.data!.exists) return const SizedBox.shrink();
+              var data = snapshot.data!.data() as Map<String, dynamic>;
+              String content = data['content'] ?? '';
+              if (content.trim().isEmpty) return const SizedBox.shrink();
+
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                color: Colors.amber[50],
+                child: Text(
+                  content,
+                  style: TextStyle(color: Colors.amber[900], fontWeight: FontWeight.w500, fontSize: 13),
+                  textAlign: TextAlign.center,
                 ),
-              ),
-              child: const Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.content_cut, size: 80, color: Colors.white),
-                  SizedBox(height: 15),
-                  Text(
-                    "WOW SALON",
-                    style: TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 2),
-                  ),
-                  SizedBox(height: 5),
-                  Text("Premium Styling & Grooming Experience", style: TextStyle(color: Colors.white70, fontSize: 16)),
-                ],
-              ),
-            ),
+              );
+            },
+          ),
 
-            // Salon Details Section
-            Padding(
-              padding: const EdgeInsets.all(25.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text("About Our Salon", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 10),
-                  Text(
-                    "Welcome to Wow Salon. We provide top-tier haircuts, professional coloring, and luxury spa treatments tailored to your lifestyle. Our master stylists are dedicated to making you look and feel exceptional.",
-                    style: TextStyle(color: Colors.grey[700], fontSize: 15, height: 1.5),
-                  ),
-                  const SizedBox(height: 25),
-                  
-                  // Operational Hours Card
-                  Card(
-                    elevation: 2,
-                    child: Padding(
-                      padding: const EdgeInsets.all(15.0),
-                      child: Column(
-                        children: [
-                          _buildInfoRow(Icons.access_time, "Hours", "Open Daily: 9:00 AM - 8:00 PM"),
-                          const Divider(),
-                          _buildInfoRow(Icons.location_on, "Location", "123 Premium Lane, Colombo, Sri Lanka"),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 40),
+          // 📆 REAL CALENDAR DATE SLIDING HORIZONTAL TABS
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            color: Colors.grey[50],
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: _upcomingWorkdays.map((date) {
+                String dateString = DateFormat('yyyy-MM-dd').format(date);
+                bool isSelected = _activeDateString == dateString;
+                
+                String dayAbbreviation = DateFormat('E').format(date); // e.g., "Mon"
+                String dayNumber = DateFormat('d').format(date); // e.g., "25"
 
-                  // Call To Action Booking Button
-                  ElevatedButton(
-                    onPressed: () {
-                      // Slide cleanly into the registration onboard view
-                      Navigator.pushNamed(context, '/register');
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blueAccent,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 18),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                return InkWell(
+                  onTap: () => setState(() => _activeDateString = dateString),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: isSelected ? Colors.black : Colors.transparent,
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    child: Column(
                       children: [
-                        Icon(Icons.calendar_month),
-                        SizedBox(width: 10),
-                        Text("Book an Appointment Now", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        Text(dayAbbreviation, style: TextStyle(color: isSelected ? Colors.white70 : Colors.black54, fontSize: 11)),
+                        Text(dayNumber, style: TextStyle(color: isSelected ? Colors.white : Colors.black87, fontWeight: FontWeight.bold, fontSize: 15)),
                       ],
                     ),
                   ),
-                ],
-              ),
+                );
+              }).toList(),
             ),
-          ],
-        ),
-      ),
-    );
-  }
+          ),
 
-  Widget _buildInfoRow(IconData icon, String title, String value) {
-    return Row(
-      children: [
-        Icon(icon, color: Colors.blueAccent),
-        const SizedBox(width: 15),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-            Text(value, style: const TextStyle(color: Colors.grey, fontSize: 14)),
-          ],
-        )
-      ],
+          const SizedBox(height: 16),
+
+          // LIVE STREAM APPOINTMENT CALENDAR GRID VIEW
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('slots')
+                  .where('dateString', isEqualTo: _activeDateString)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                var visibleDocs = snapshot.data?.docs.where((doc) {
+                      var data = doc.data() as Map<String, dynamic>;
+                      return data['status'] != 'terminated';
+                    }).toList() ?? [];
+
+                visibleDocs.sort((a, b) => (a['time'] as String).compareTo(b['time'] as String));
+
+                if (visibleDocs.isEmpty) {
+                  return const Center(
+                    child: Text("No appointments scheduled for this date.", style: TextStyle(color: Colors.black54)),
+                  );
+                }
+
+                return GridView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    childAspectRatio: 1.8,
+                  ),
+                  itemCount: visibleDocs.length,
+                  itemBuilder: (context, index) {
+                    var doc = visibleDocs[index];
+                    var slot = doc.data() as Map<String, dynamic>;
+
+                    String time = slot['time'] ?? '';
+                    String status = slot['status'] ?? 'available';
+
+                    Color cellColor = const Color(0xFF4CAF50); // Available Green 🟢
+                    bool canTap = true;
+
+                    if (status == 'pending') {
+                      cellColor = const Color(0xFFFFC107); // Pending Yellow 🟡
+                      canTap = false;
+                    } else if (status == 'approved') {
+                      cellColor = const Color(0xFFF44336); // Confirmed Red 🔴
+                      canTap = false;
+                    }
+
+                    String displayTime = time.split(' - ')[0];
+
+                    return InkWell(
+                      onTap: canTap ? () => Navigator.pushNamed(context, '/login') : null,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        decoration: BoxDecoration(color: cellColor, borderRadius: BorderRadius.circular(8)),
+                        alignment: Alignment.center,
+                        child: Text(displayTime, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
